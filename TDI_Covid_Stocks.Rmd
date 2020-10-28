@@ -1,6 +1,6 @@
 ---
-title: "TDI Project Proposal"
-author: "Levi Lee"
+title: "COVID-19 and Stocks Price Analysis"
+author: "L. Lee"
 date: "10/28/2020"
 output:
   html_document:
@@ -13,9 +13,11 @@ library(quantmod)
 library(plotly)
 ```
 
-## Web Scraping
+## Data Sourcing
 
-```{r}
+Data was sourced from Yahoo! Finance. We choose to focus on 27 stocks that have been in the Dow Jones Index for at least two years. 
+
+```{r, message = FALSE, warning=FALSE, echo=FALSE}
 # get data via web scraping from yahoo finance
 # focus is on 27 companies that were listed in Dow for 2+ years
 companies <- c("MMM", "AXP", "AAPL", "BA", "CAT", "CVX", 
@@ -42,6 +44,8 @@ companies.df <- list(dataMMM, dataAXP, dataAAPL, dataBA, dataCAT, dataCVX,
 
 ## Data Cleaning 
 
+Create a dataframe of daily closing prices for each stock in the four most recent financial quarters. 
+
 ```{r}
 # create a dataset with 27 stocks and 252 trading days 
 # 27 stocks (rows) and 252 returns (columns/features/predictors)
@@ -50,7 +54,7 @@ companies.closings <- matrix(data = NA, nrow = length(companies),
                              ncol = length(dataMMM$MMM.Close))
 
 for (i in 1:length(companies.df)){
-  companies.closings[i,] <- as.numeric(companies.df[[i]][,4]) # closings are on the 4th columnm
+  companies.closings[i,] <- as.numeric(companies.df[[i]][,4]) # closings are on the 4th column
 }
 
 # change the names of the rows
@@ -66,8 +70,7 @@ day <- c(1:nrow(companies.closings.t))
 
 df = as.data.frame(cbind(day, companies.closings.t))
 
-install.packages("plotly")
-library(plotly)
+
 
 asset1 <- plot_ly(data = df, x = ~day, y = ~MMM, name = 'MMM', type = 'scatter', mode = 'lines', 
                  line = list(color = 'rgb(1, 1, 1)'))
@@ -77,9 +80,11 @@ for (i in 2:27){
 }
 ```
 
-## Asset 1: Stock Trends
+## Asset 1: Stock Trends 
 
-```{r, fig.align = 'center', fig.width=10, fig.height=8}
+The plot below displays tends for all 27 stocks prices in the past four fiscal quarters (July 1st, 2019 to June 30th, 2020). Click once on the company name on the legend to hind its respective line. Double click on a company to isolate it. Use the buttons on the top right of the plot to zoom, pan, navigate, and compare closing prices for companies. 
+
+```{r, fig.align = 'center', fig.width=10, fig.height=8, warning=FALSE}
 asset1 <- plot_ly(data = df, x = ~day, y = ~MMM, name = 'MMM', 
                   type = 'scatter', mode = 'lines',  line = list(color = 'rgb(1, 1, 1)'))
 
@@ -88,15 +93,15 @@ for (i in 2:27){
 }
 
 asset1 <-  asset1 %>% 
-  add_trace(x = 0, y = c(0, 400), name = 'Quarter 1', 
+  add_trace(x = 0, y = c(0, 400), name = '2019 - Q3', 
             line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
-  add_trace(x = nrow(df)/4, y = c(0, 400), name = 'Quarter 2', 
+  add_trace(x = nrow(df)/4, y = c(0, 400), name = '2019 - Q4', 
             line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
-  add_trace(x = 2*nrow(df)/4, y = c(0, 400), name = 'Quarter 3',
+  add_trace(x = 2*nrow(df)/4, y = c(0, 400), name = '2020 - Q1',
             line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
-  add_trace(x = 3*nrow(df)/4, y = c(0, 400), name = 'Quarter 4', 
+  add_trace(x = 3*nrow(df)/4, y = c(0, 400), name = '2020 - Q2', 
             line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
-  layout(title = 'Closing Stock Prices of Dow Jones (2019 - Q3 to 2020 - Q2)',
+  layout(title = 'Closing Stock Prices of Dow Jones (July 1st, 2019 to June 30th, 2020)',
          xaxis = list(title = 'Day', zeroline = TRUE),
          yaxis = list(title = 'Closing Price ($)'))
 
@@ -106,6 +111,8 @@ asset1
 
 ## Asset 2: PCA Biplots
 
+Using principal components analysis (PCA), we have reduced the dimension of the data into just two linear components, shown in the biplots below. We see that in 2019 (top), when the US economy was functioning normally, stocks tends to not correlate with each other--the vectors of each stock radiate in all directions. However, due to COVID-19, the stocks most, if not all, companies fell. This is reflected in the biplot for 2020 (bottom) since all the vectors of each company all point in the same general direction. 
+
 ```{r, fig.align = 'center', fig.width=8, fig.height=16}
 # half year cutoff
 half = nrow(companies.closings.t)/2
@@ -114,7 +121,7 @@ pca_2019 <- prcomp(companies.closings.t[1 : half, ], scale = TRUE, center = TRUE
 pca_2020 <- prcomp(companies.closings.t[(half + 1) : (2*half), ], scale = TRUE, center = TRUE)
 
 par(mfrow=c(2,1)) 
-biplot(pca_2019)
-biplot(pca_2020)
+biplot(pca_2019, main = "2019 - Q3 & Q4")
+biplot(pca_2020, main = "2020 - Q1 & Q2")
 par(mfrow=c(1,1)) 
 ```
