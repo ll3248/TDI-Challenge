@@ -1,0 +1,193 @@
+---
+title: "COVID-19 and Stocks Price Analysis - Update"
+author: "L. Lee"
+date: "11/15/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(quantmod)
+library(plotly)
+library(sparsepca)
+```
+
+## Data Sourcing
+
+Data was sourced from Yahoo! Finance. We choose to focus on 27 companies of stocks that have been in the Dow Jones Index for at least two years. 
+
+```{r, message = FALSE, warning=FALSE, echo=FALSE}
+# get data via web scraping from yahoo finance
+# focus is on 27 companies that were listed in Dow for 2+ years
+companies <- c("MMM", "AXP", "AAPL", "BA", "CAT", "CVX", 
+               "CSCO", "KO", "XOM", "GS", "HD", 
+               "IBM", "INTC", "JNJ", "JPM", "MCD", "MRK", 
+               "MSFT", "NKE", "PG", "TRV", "UNH", 
+               "VZ", "V", "WMT", "WBA", "DIS")
+
+companies.df.list <- rep(NA, length(companies))
+
+for (i in 1:length(companies)){
+  assign(paste("data", companies[i], sep = ""), 
+         getSymbols(companies[i], auto.assign = F, from ="2019-07-01", to = "2020-11-13"))
+}
+
+# datasets are labeled as 'data[STOCK]' e.g. dataAAPL
+
+companies.df <- list(dataMMM, dataAXP, dataAAPL, dataBA, dataCAT, dataCVX, 
+                     dataCSCO, dataKO, dataXOM, dataGS, dataHD, 
+                     dataIBM, dataINTC, dataJNJ, dataJPM, dataMCD, dataMRK, 
+                     dataMSFT, dataNKE, dataPG, dataTRV, dataUNH, 
+                     dataVZ, dataV, dataWMT, dataWBA, dataDIS)
+```
+
+## Data Cleaning 
+
+Create a dataframe of daily closing prices for each stock in the five most recent financial quarters and the most updated information for the current quarter at the time of this writing. 
+
+```{r}
+# create a dataset with 27 stocks and 252 trading days 
+# 27 stocks (rows) and 252 returns (columns/features/predictors)
+
+companies.closings <- matrix(data = NA, nrow = length(companies), 
+                             ncol = length(dataMMM$MMM.Close))
+
+for (i in 1:length(companies.df)){
+  companies.closings[i,] <- as.numeric(companies.df[[i]][,4]) # closings are on the 4th column
+}
+
+# change the names of the rows
+rownames(companies.closings) <- companies
+
+# take the transpose
+# each row is a trading day with 29 different stock prices 
+# each column is a stock
+companies.closings.t <- t(companies.closings)
+
+
+day <- c(1:nrow(companies.closings.t))
+
+df = as.data.frame(cbind(day, companies.closings.t))
+```
+
+## Stock Price Trends 
+
+The plot below displays tends for all 27 stocks prices in the past four fiscal quarters (July 1st, 2019 to November 13th, 2020). Click once on the company name on the legend to hind its respective line. Double click on a company to isolate it. Use the buttons on the top right of the plot to zoom, pan, navigate, and compare closing prices for companies. 
+
+```{r, fig.align = 'center', fig.width=10, fig.height=8, warning=FALSE}
+asset1 <- plot_ly(data = df, x = ~day, y = ~MMM, name = 'MMM', type = 'scatter', mode = 'lines', 
+                 line = list(color = 'rgb(1, 1, 1)'))
+
+for (i in 2:27){
+  asset1 <- asset1 %>% add_trace(y = df[,i], name = companies[i], line = list(color = 'rgb(i, i, i)')) 
+}
+
+asset1 <- plot_ly(data = df, x = ~day, y = ~MMM, name = 'MMM', 
+                  type = 'scatter', mode = 'lines',  line = list(color = 'rgb(1, 1, 1)'))
+
+for (i in 2:27){
+  asset1 <- asset1 %>% add_trace(y = df[,i], name = companies[i], line = list(color = 'rgb(i, i, i)')) 
+}
+
+asset1 <-  asset1 %>% 
+  add_trace(x = 0, y = c(0, 400), name = '2019 - Q3', 
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  add_trace(x = 64, y = c(0, 400), name = '2019 - Q4', 
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  add_trace(x = 128, y = c(0, 400), name = '2020 - Q1',
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  add_trace(x = 192, y = c(0, 400), name = '2020 - Q2', 
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  add_trace(x = 256, y = c(0, 400), name = '2020 - Q3', 
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  add_trace(x = 320, y = c(0, 400), name = '2020 - Q4', 
+            line = list(color = 'rgb(100, 100, 100)', dash = 'dash')) %>% 
+  layout(title = 'Closing Stock Prices of Dow Jones (July 1st, 2019 to June 30th, 2020)',
+         xaxis = list(title = 'Day', zeroline = TRUE),
+         yaxis = list(title = 'Closing Price ($)'))
+
+asset1
+```
+
+
+## PCA Biplots
+
+Using principal components analysis (PCA), we have reduced the dimension of the data into just two linear components, shown in the biplots below. We see that in 2019 Q3 and Q4 (top), when the US economy was functioning normally, stocks tends to not correlate with each other--the vectors of each stock radiate in all directions. However, due to COVID-19, the stocks most, if not all, companies fell. This is reflected in the biplot for 2020 (middle) since all the vectors of each company all point in the same general direction. 
+
+
+```{r, fig.align = 'center', fig.width=8, fig.height=16}
+# 2019-2020 cutoff thee are 64*2 = 128 trading days in the last two quarters of 2019
+half_year = 128 
+
+pca_2019_q3q4 <- prcomp(companies.closings.t[1 : half_year, ], scale = TRUE, center = TRUE)
+pca_2020_q1q2 <- prcomp(companies.closings.t[(half_year + 1) : (2*half_year), ], 
+                        scale = TRUE, center = TRUE)
+pca_2020_q3q4 <- prcomp(companies.closings.t[(2*half_year + 1) : nrow(companies.closings.t), ], 
+                        scale = TRUE, center = TRUE)
+
+par(mfrow=c(3,1)) 
+biplot(pca_2019_q3q4, main = "2019 - Q3 & Q4")
+biplot(pca_2020_q1q2, main = "2020 - Q1 & Q2")
+biplot(pca_2020_q3q4, main = "2020 - Q3 & Partial Q4")
+par(mfrow=c(3,1)) 
+```
+
+*Update:* Looking at Q3 and the most up-to-date information of Q4 (bottom), we will see that the vectors of each company begin to fan out a bit more, even though they are still pointing in the same general direction. It should be noted the difference in overall cardinal direction between the first and second halves of 2020 is irreverent given that the loadings of the principal components can differ up to a sign. 
+
+This current analysis is still rather limited. Given the current economic situation, it is apparent that stock prices are falling across the board. Because stocks are less correlated than with each other in the latter half of 2020, we can begin to pick out uncorrelated stocks to create diverse portfolios. However, this is not enough and we turn to sparse PCA to analyze these stocks even further. 
+
+## Sparse PCA Biplots
+
+The idea that investment portfolios ought to be diverse is not new. The point of diversification is mitigate losses in the event a particular stock loses its value. However, it is often the case that groups of stocks will fall at the same time, particularly companies within similar industries or partnerships between companies. 
+
+Sparse PCA not only reduces the dimensionality of the data into two linear components, but it also utilizes regularization to reduces some of the coefficients of those linear combinations to zero. Thus, we now see some companies lie on the x- and y-axes, and some at the origin as well. The companies now radiate in all direction, similar to the 2019 PCA biplot. 
+
+Companies whose coordinates are nonzero that lie on different quadrants are considered uncorrelated with each other, and thus narrows the pool of stocks to be considered for portfolio selection. 
+
+There is no direct function to generate biplots from a sparse PCA from the package used, but a manual plot can be generated. Using the latest sparse PCA biplot available, for example, we believe that a portfolio with CSCO, MMM, NKE, and CVX would be an example of a diverse portfolio. Other combinations exist as well.  
+
+```{r, fig.align = 'center', fig.width=8, fig.height=16}
+# 2019-2020 cutoff thee are 64*2 = 128 trading days in the last two quarters of 2019
+half_year = 128 
+
+spca_2019_q3q4 <- spca(companies.closings.t[1 : half_year, ], 
+                       scale = TRUE, center = TRUE, verbose = FALSE)
+spca_2020_q1q2 <- spca(companies.closings.t[(half_year + 1) : (2*half_year), ], 
+                       scale = TRUE, center = TRUE, verbose = FALSE)
+spca_2020_q3q4 <- spca(companies.closings.t[(2*half_year + 1) : nrow(companies.closings.t), ], 
+                       scale = TRUE, center = TRUE, verbose = FALSE)
+
+par(mfrow=c(3,1)) 
+plot(spca_2019_q3q4$loadings[1, ], spca_2019_q3q4$loadings[2, ], 
+     main = "2019 - Q3 & Q4", xlab = "PC1", ylab = "PC2",
+     xlim = c(-0.6, 0.4), ylim = c(-0.4, 0.5))
+abline(h = 0); abline(v = 0)
+text(x = spca_2019_q3q4$loadings[1, ], y = spca_2019_q3q4$loadings[2, ] + 0.025, 
+     labels = companies, 
+     cex = 0.75, col = "red")
+
+plot(spca_2020_q1q2$loadings[1, ], spca_2020_q1q2$loadings[2, ], 
+     main = "2020 - Q1 & Q2", xlab = "PC1", ylab = "PC2",
+     xlim = c(-0.6, 0.3), ylim = c(-0.3, 0.5))
+abline(h = 0); abline(v = 0)
+text(x = spca_2020_q1q2$loadings[1, ], y = spca_2020_q1q2$loadings[2, ] + 0.025, 
+     labels = companies, cex = 0.75, col = "red")
+
+plot(spca_2020_q3q4$loadings[1, ], spca_2020_q3q4$loadings[2, ], 
+     main = "2020 - Q3 & Partial Q4", xlab = "PC1", ylab = "PC2",
+     xlim = c(-0.8, 0.4), ylim = c(-0.3, 0.4))
+abline(h = 0); abline(v = 0)
+text(x = spca_2020_q3q4$loadings[1, ], y = spca_2020_q3q4$loadings[2, ] + 0.025, 
+     labels = companies, cex = 0.75, col = "red")
+
+par(mfrow=c(3,1)) 
+
+```
+
+## Main Takeaways 
+
+Beginning investors can use this as a guide to determine what stocks to consider for their initial portfolios. Note that investors must not take these results at face value and that they must couple this with their own market research, risk preferences, and trust in themselves. 
+
+Current investors may also find this analysis helpful in determining what stocks have unforeseen correlations that they may not have initially considered when constructing their own portfolios. They may consider selling certain stocks that align too closely with others and purchase ones that are not. 
